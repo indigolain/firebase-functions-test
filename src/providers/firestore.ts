@@ -22,7 +22,8 @@
 
 import { Change } from 'firebase-functions';
 import { dateToTimestampProto } from 'firebase-functions/lib/encoder';
-import { firestore, app } from 'firebase-admin';
+import * as firebaseAdmin from 'firebase-admin';
+import * as firebaseTesting from '@firebase/testing';
 import { has, get, isEmpty, isPlainObject, mapValues } from 'lodash';
 
 import { testApp } from '../app';
@@ -38,7 +39,7 @@ export interface DocumentSnapshotOptions {
   /** The Firebase app that the Firestore database belongs to. You do not need to supply
    * this parameter if you supplied Firebase config values when initializing firebase-functions-test.
    */
-  firebaseApp?: app.App;
+  firebaseApp?: firebaseAdmin.app.App;
 }
 
 /** Create a DocumentSnapshot. */
@@ -54,10 +55,10 @@ export function makeDocumentSnapshot(
   let firestoreService;
   let project;
   if (has(options, 'app')) {
-    firestoreService = firestore(options.firebaseApp);
+    firestoreService = firebaseAdmin.firestore(options.firebaseApp);
     project = get(options, 'app.options.projectId');
   } else {
-    firestoreService = firestore(testApp().getApp());
+    firestoreService = firebaseAdmin.firestore(testApp().getApp());
     project = process.env.GCLOUD_PROJECT;
   }
 
@@ -84,7 +85,9 @@ export function makeDocumentSnapshot(
 /** Fetch an example document snapshot already populated with data. Can be passed into a wrapped
  * Firestore onCreate or onDelete function.
  */
-export function exampleDocumentSnapshot(): firestore.DocumentSnapshot {
+export function exampleDocumentSnapshot():
+  | firebaseAdmin.firestore.DocumentSnapshot
+  | firebaseTesting.firestore.DocumentSnapshot {
   return makeDocumentSnapshot(
     {
       aString: 'foo',
@@ -102,7 +105,8 @@ export function exampleDocumentSnapshot(): firestore.DocumentSnapshot {
  * Can be passed into a wrapped Firestore onUpdate or onWrite function.
  */
 export function exampleDocumentSnapshotChange(): Change<
-  firestore.DocumentSnapshot
+  | firebaseAdmin.firestore.DocumentSnapshot
+  | firebaseTesting.firestore.DocumentSnapshot
 > {
   return Change.fromObjects(
     makeDocumentSnapshot(
@@ -180,7 +184,12 @@ export function objectToValueProto(data: object) {
         bytesValue: val,
       };
     }
-    if (val instanceof firestore.DocumentReference) {
+    if (
+      [
+        firebaseAdmin.firestore.DocumentReference,
+        firebaseTesting.firestore.DocumentReference,
+      ].some((klass) => val instanceof klass)
+    ) {
       const projectId: string = get(val, '_referencePath.projectId');
       const database: string = get(val, '_referencePath.databaseId');
       const referenceValue: string = [
@@ -192,7 +201,12 @@ export function objectToValueProto(data: object) {
       ].join('/');
       return { referenceValue };
     }
-    if (val instanceof firestore.Timestamp) {
+    if (
+      [
+        firebaseAdmin.firestore.Timestamp,
+        firebaseTesting.firestore.Timestamp,
+      ].some((klass) => val instanceof klass)
+    ) {
       return {
         timestampValue: val.toDate().toISOString(),
       };
